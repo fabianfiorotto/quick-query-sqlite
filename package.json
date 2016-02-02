@@ -1,0 +1,33 @@
+{
+  "name": "quick-query-sqlite",
+  "main": "./lib/quick-query-sqlite",
+  "version": "0.0.0",
+  "description": "Run sql queries in Sqlite",
+  "keywords": [
+    "sql",
+    "sqlite"
+  ],
+  "package-deps": [
+    "quick-query"
+  ],
+  "consumedServices": {
+    "quick-query-protocols": {
+      "versions": {
+        "0.6.0": "consumeConnectView"
+      }
+    },
+    "quick-query-browser": {
+      "versions": {
+        "0.7.0": "consumeBrowserView"
+      }
+    }
+  },
+  "repository": "https://github.com/atom/quick-query-sqlite",
+  "license": "MIT",
+  "engines": {
+    "atom": ">=1.0.0 <2.0.0"
+  },
+  "dependencies": {
+    "sql.js": "git+https://github.com/fabianfiorotto/sql.js/#qq01"
+  }
+}
