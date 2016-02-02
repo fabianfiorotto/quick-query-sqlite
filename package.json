@@ -22,7 +22,7 @@
       }
     }
   },
-  "repository": "https://github.com/atom/quick-query-sqlite",
+  "repository": "https://github.com/fabianfiorotto/quick-query-sqlite",
   "license": "MIT",
   "engines": {
     "atom": ">=1.0.0 <2.0.0"
