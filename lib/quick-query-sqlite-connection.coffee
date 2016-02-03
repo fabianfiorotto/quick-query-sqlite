@@ -1,4 +1,5 @@
 sql = require 'sql.js'
+fs = require 'fs'
 
 {Emitter} = require 'atom'
 
