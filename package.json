@@ -28,6 +28,6 @@
     "atom": ">=1.0.0 <2.0.0"
   },
   "dependencies": {
-    "sql.js": "git+https://github.com/fabianfiorotto/sql.js/#qq01"
+    "sql.js": "git+https://github.com/fabianfiorotto/sql.js/#qq02"
   }
 }
