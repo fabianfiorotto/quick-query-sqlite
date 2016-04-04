@@ -90,11 +90,7 @@ class QuickQuerySqliteConnection
         fields = null
         while stmt.step()
           fields ?= stmt.getColumnNames().map (c)-> {name: c}
-          values = stmt.get()
-          row = {}
-          for field,i in fields
-            row[field.name] = values[i]
-          rows.push row
+          rows.push stmt.get()
         if rows.length == 0
           fields = [{name: "No results"}]
         callback(message,rows,fields)
@@ -119,6 +115,12 @@ class QuickQuerySqliteConnection
     catch e
       message = { type: 'error' , content: e.message }
       callback(message)
+
+  objRowsMap: (rows,fields,callback)->
+    rows.map (r,i) =>
+      row = {}
+      row[field.name] = r[j] for field,j in fields
+      if callback? then callback(row) else row
 
   _isBegin: (str)->
     (/^(\s*\-\-.*\n)*\s*BEGIN.*$/i).test(str) #BEGIN TRANSACTION is readonly stmt
@@ -166,7 +168,7 @@ class QuickQuerySqliteConnection
     text = "PRAGMA database_list"
     @query text, (err,rows, fields) =>
       if !err
-        databases = rows.map (row) =>
+        databases = @objRowsMap rows, fields, (row) =>
           new QuickQuerySqliteDatabase(@,row['name'])
         callback(databases)
 
@@ -177,7 +179,7 @@ class QuickQuerySqliteConnection
       text = "SELECT name FROM sqlite_master WHERE type='table'"
     @query text, (err,rows, fields) =>
       if !err
-        tables = rows.map (row) =>
+        tables = @objRowsMap rows,fields, (row) =>
           new QuickQuerySqliteTable(database,row,fields)
         callback(tables)
 
@@ -185,7 +187,7 @@ class QuickQuerySqliteConnection
     text = "PRAGMA table_info('#{table.name}')"
     @query text, (err,rows, fields) =>
       if !err
-        columns = rows.map (row) =>
+        columns = @objRowsMap rows, fields, (row) =>
           new QuickQuerySqliteColumn(table,row)
         callback(columns)
 
