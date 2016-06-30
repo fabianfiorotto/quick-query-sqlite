@@ -3,6 +3,13 @@ QuickQuerySqliteConnection = require './quick-query-sqlite-connection'
 {CompositeDisposable} = require 'atom'
 
 module.exports = QuickQuerySqlite =
+  config:
+    openFromAtom:
+      type: 'boolean'
+      default: true
+      title: 'Open sqlite3 files with Quick Query'
+      description: 'Extensions '+QuickQuerySqliteConnection.fileExtencions.join(', ')
+
   subscriptions: null
 
   activate: (state) ->
@@ -13,10 +20,11 @@ module.exports = QuickQuerySqlite =
 
     @subscriptions.add atom.workspace.addOpener (uriToOpen) =>
       return unless ///\.(#{QuickQuerySqliteConnection.fileExtencions.join('|')})$///.test uriToOpen
-      if !@browserView || !@browserView.is(':visible')
+      return unless atom.config.get('quick-query-sqlite.openFromAtom')
+      unless @browserView && @browserView.is(':visible')
         workspaceElement = atom.views.getView(atom.workspace)
         atom.commands.dispatch workspaceElement, 'quick-query:toggle-browser'
-      #Don't open a connection twice. justo ensure that the connection is selected.
+        return unless @browserView #quick-query isn't installed or is disabled.
       connection = (i for i in @browserView.connections when i.protocol is 'sqlite' && i.info.file == uriToOpen)[0]
       if !connection
         connectionPromise = @connectView.buildConnection({protocol: 'sqlite', autosave: false, file: uriToOpen})
