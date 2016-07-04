@@ -1,4 +1,7 @@
-## 0.2.0 - First Release
+## 0.3.0 - Third Release
+* Open sqlite's files directly from atom
+
+## 0.2.0 - Second Release
 * Array API implementation
 * Update sqlite v3.11
 
