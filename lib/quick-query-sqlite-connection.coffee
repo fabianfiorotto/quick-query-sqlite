@@ -53,7 +53,7 @@ class QuickQuerySqliteConnection
   type: 'connection'
   child_type: 'database'
 
-  allowEdit: false
+  allowEdition: false
   @fromFilesystem: true
   @fileExtencions: ['db','sqlite','sqlite3','sdb','sdb3']
 
@@ -158,11 +158,12 @@ class QuickQuerySqliteConnection
 
   setDefaultDatabase: (database)->
 
-  getDefaultDatabase: ->
+  getDefaultDatabase: -> 'main'
 
   parent: -> @
 
   children: (callback)->
+    @getDatabases (databases) -> callback(databases)
 
   getDatabases: (callback) ->
     text = "PRAGMA database_list"
