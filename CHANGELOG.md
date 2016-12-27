@@ -1,3 +1,6 @@
+## 0.3.1 - Patch release
+* main is always the default database
+
 ## 0.3.0 - Third Release
 * Open sqlite's files directly from atom
 
