@@ -1,3 +1,6 @@
+## 0.3.2 - Update Sqlite
+* Update sqlite v3.22
+
 ## 0.3.1 - Patch release
 * main is always the default database
 
