@@ -1,5 +1,4 @@
-sql = require 'sql.js'
-fs = require 'fs'
+sql = require './sql-proxy'
 
 {Emitter} = require 'atom'
 
@@ -63,12 +62,9 @@ class QuickQuerySqliteConnection
   constructor: (@info)->
     @emitter = new Emitter()
     @autosave = @info.autosave? && @info.autosave
-    @totalChanges = 0
 
   connect: (callback)->
-    filebuffer = fs.readFileSync(@info.file);
-    @db = new sql.Database(filebuffer)
-    callback()
+    @connection = sql.createConnection(@info, callback)
 
   serialize: ->
     file: @info.file
@@ -78,40 +74,19 @@ class QuickQuerySqliteConnection
     @close()
 
   close: ->
-    @db.close()
+    @connection.close();
 
   query: (text,callback) ->
     message = null
-    texts = @_splitStatments(text)
     try
-      stmt = @db.prepare(texts[0])
-      if stmt.isReadonly() && !@_isBegin(texts[0])
-        rows = []
-        fields = null
-        while stmt.step()
-          fields ?= stmt.getColumnNames().map (c)-> {name: c}
-          rows.push stmt.get()
-        if rows.length == 0
-          fields = [{name: "No results"}]
-        callback(message,rows,fields)
-        stmt.free()
-      else
-        for text,i in texts
-          stmt = @db.prepare(text) if i > 0
-          stmt.step()
-          stmt.free()
-        result = @db.exec("SELECT total_changes() as totalChanges")
-        if result[0]?.values[0][0]
-          changes = result[0].values[0][0]
-          if changes == @totalChanges
-            message = {content: "Success"}
-          else
-            message = {content: "#{changes - @totalChanges} row(s) affected"}
-          @totalChanges = changes
-          @save() if @autosave
+      @connection.query text, ({type, content, fields, rows}) =>
+        if fields? && rows?
+          callback(null,rows,fields)
+        else if @autosave
+          @connection.save =>
+            callback {type, content}
         else
-          message = {content: "Success"}
-        callback(message)
+          callback {type, content}
     catch e
       message = { type: 'error' , content: e.message }
       callback(message)
@@ -121,40 +96,6 @@ class QuickQuerySqliteConnection
       row = {}
       row[field.name] = r[j] for field,j in fields
       if callback? then callback(row) else row
-
-  _isBegin: (str)->
-    (/^(\s*\-\-.*\n)*\s*BEGIN.*$/i).test(str) #BEGIN TRANSACTION is readonly stmt
-
-  _splitStatments: (str)->
-    ii = []
-    ch1 = null
-    ch2 = null
-    status = 1 #1 statment #2 comment #3 simple quote #4 double quote
-    for i in [0..(str.length-1)]
-      ch2 = ch1
-      ch1 = str[i]
-      switch status
-        when 1
-          if ch1 == ';' then ii.push(i+1)
-          if ch1 == '-' && ch2 == '-' then status = 2
-          if ch1 == "'" && ch2 != '\\' then status = 3
-          if ch1 == '"' && ch2 != '\\' then status = 4
-        when 2
-          if ch1 == "\n" then status = 1
-        when 3
-          if ch1 == "'" && ch2 != '\\' then status = 1
-        when 4
-          if ch1 == '"' && ch2 != '\\' then status = 1
-    strings = []
-    i1 = 0
-    for i in ii
-      str1 = str.substring(i1,i)
-      strings.push(str1) unless /^\s*$/.test(str1)
-      i1 = i
-    if i1 != str.length
-      str1 = str.substring(i1,str.length)
-      strings.push(str1) unless /^\s*$/.test(str1)
-    return strings
 
   setDefaultDatabase: (database)->
 
@@ -190,6 +131,7 @@ class QuickQuerySqliteConnection
       if !err
         columns = @objRowsMap rows, fields, (row) =>
           new QuickQuerySqliteColumn(table,row)
+        table.columns = columns
         callback(columns)
 
   hiddenDatabase: (database) ->
@@ -202,12 +144,6 @@ class QuickQuerySqliteConnection
     table_name = @escapeId(table.name)
     database_name = @escapeId(table.database.name)
     "SELECT #{columns} FROM #{database_name}.#{table_name} LIMIT 1000"
-
-  save: ->
-    data = @db.export()
-    buffer = new Buffer(data)
-    fs.writeFileSync(@info.file, buffer);
-    @totalChanges = 0 #saving resets the counter. I don't know why.
 
   createDatabase: (model,info)->
     "Not supported"
@@ -234,33 +170,44 @@ class QuickQuerySqliteConnection
     oldName = @escapeId(delta.old_name)
     "ALTER TABLE #{database}.#{oldName} RENAME TO #{newName};"
 
+  renameColumn: (model,delta)->
+    database = @escapeId(model.table.database.name)
+    table = @escapeId(model.table.name)
+    column = @escapeId(model.name)
+    new_name = @escapeId(delta.new_name);
+    "ALTER TABLE #{database}.#{table} RENAME COLUMN #{column} TO #{new_name};"
+
+  onlyNameChanged: (model, delta) ->
+    delta.new_name != model.name &&
+    delta.default == model.default &&
+    delta.nullable == model.nullable
+
   alterColumn: (model,delta)->
+    return @renameColumn(model, delta) if @onlyNameChanged(model, delta)
     table_name = model.table.name
     tp_table = @escapeId(table_name+"_backup")
     table = @escapeId(table_name)
-    text = "PRAGMA table_info('#{table_name}')"
-    result = @db.exec(text)
     def_col = (col)=>
-       if col[1] == model.name
+       if col.name == model.name
         dafaultValue =  @escape(delta.default,delta.datatype)
         delta.new_name+" "+delta.datatype+
-        (if col[5] == 1  then " PRIMARY KEY" else "") +
+        (if col.primary_key  then " PRIMARY KEY" else "") +
         (if !delta.nullable then " NOT NULL" else " NULL")+
-        (if delta.default then " DEFAULT #{dafaultValue}" else "") #TODO default must be scaped
+        (if delta.default then " DEFAULT #{dafaultValue}" else "") #TODO default must be escaped
        else
-        dafaultValue =  @escape(col[4],col[2])
-        col[1]+" "+col[2] +
-        (if col[5] == 1 then " PRIMARY KEY" else "") +
-        (if col[3] == 1 then " NOT NULL" else " NULL")+
-        (if col[4] then " DEFAULT #{@escape(col[4])}" else "")
+        dafaultValue = @escape(col.default,col.type)
+        col.name + " " + col.type +
+        (if col.primary_key then " PRIMARY KEY" else "") +
+        (if col.nullable then " NOT NULL" else " NULL")+
+        (if col.default then " DEFAULT #{@escape(col.default)}" else "")
 
-    columns = result[0].values.map((col)->
-       if col[1] == model.name then delta.new_name else col[1]
+    columns = model.table.columns.map((col)->
+       if col.name == model.name then delta.new_name else col.name
     ).join(',')
-    columns_def = result[0].values.map(def_col).join(',')
+    columns_def =  model.table.columns.map(def_col).join(',')
 
-    columns2 = result[0].values.map((col)->
-        if col[1] == model.name then col[1]+" as "+delta.new_name else col[1]
+    columns2 =  model.table.columns.map((col)->
+        if col.name == model.name then col.name + " as " + delta.new_name else col.name
     ).join(',')
 
     "-- (!!!) NOTE: this will delete your constraints and indexes\n"+
@@ -280,27 +227,10 @@ class QuickQuerySqliteConnection
     "DROP TABLE #{database}.#{table};"
 
   dropColumn: (model)->
-    table_name = model.table.name
-    tp_table = @escapeId(table_name+"_backup")
-    table = @escapeId(table_name)
-    text = "PRAGMA table_info('#{table_name}')"
-    result = @db.exec(text)
-    result[0].values = result[0].values.filter (col)-> col[1] != model.name
-    def_col = (col)=>
-      dafaultValue = @escape(col[4],col[2])
-      col[1]+" "+ col[2] +
-      (if col[5] == 1 then " PRIMARY KEY" else "") +
-      (if col[3] == 1 then " NOT NULL" else " NULL")+
-      (if col[4] then " DEFAULT #{dafaultValue}" else "")
-    columns = result[0].values.map((col)-> col[1]).join(',')
-    columns_def = result[0].values.map(def_col).join(',')
-    "-- (!!!) NOTE: this will delete your constraints and indexes\n"+
-    "CREATE TEMPORARY TABLE #{tp_table}(#{columns_def});\n"+
-    "INSERT INTO #{tp_table} SELECT #{columns} FROM #{table};\n"+
-    "DROP TABLE #{table};\n"+
-    "CREATE TABLE #{table}(#{columns_def});\n"+
-    "INSERT INTO #{table} SELECT #{columns} FROM #{tp_table};\n"+
-    "DROP TABLE #{tp_table};"
+    table = @escapeId(model.name)
+    database = @escapeId(model.table.database.name)
+    column = @escapeId(model.table.name)
+    "ALTER TABLE #{database}.#{table} DROP COLUMN #{column};"
 
   sentenceReady: (callback)->
     @emitter.on 'sentence-ready', callback
