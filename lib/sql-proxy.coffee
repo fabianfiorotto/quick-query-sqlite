@@ -9,7 +9,7 @@ module.exports = class SqlProxy
   listen: (oEvent)->
     {id, response} = oEvent.data
     index = @callbacks.findIndex((callback) -> callback.id == id)
-    @callbacks[index].cb(response)
+    @callbacks[index].cb?(response)
     @callbacks.splice(index, 1)
 
   connect: (info, cb) ->

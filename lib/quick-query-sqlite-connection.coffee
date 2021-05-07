@@ -145,6 +145,9 @@ class QuickQuerySqliteConnection
     database_name = @escapeId(table.database.name)
     "SELECT #{columns} FROM #{database_name}.#{table_name} LIMIT 1000"
 
+  save: ->
+    @connection.save();
+
   createDatabase: (model,info)->
     "Not supported"
 
