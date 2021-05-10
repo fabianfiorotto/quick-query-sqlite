@@ -79,11 +79,11 @@ class QuickQuerySqliteConnection
   query: (text,callback) ->
     message = null
     try
-      @connection.query text, ({type, content, fields, rows}) =>
+      @connection.query(text).then ({type, content, fields, rows}) =>
         if fields? && rows?
           callback(null,rows,fields)
         else if @autosave
-          @connection.save =>
+          @connection.save().then =>
             callback {type, content}
         else
           callback {type, content}
