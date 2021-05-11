@@ -1,3 +1,8 @@
+## 0.4.0 - WASM & Workers
+* Update sqlite v3.35
+* Run queries in a worker
+* Use web assembly version of sql.js
+
 ## 0.3.2 - Update Sqlite
 * Update sqlite v3.22
 
