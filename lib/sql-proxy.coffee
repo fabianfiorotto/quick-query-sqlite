@@ -3,7 +3,7 @@ module.exports = class SqlProxy
 
   @createConnection: (info, cb) ->
     instance = new SqlProxy()
-    instance.connect(info).then(cb);
+    instance.connect(info).then(cb).catch(cb)
     return new Proxy instance,
         get: (target, key) ->
           target[key] || ((args...) -> target.sendAction(key, args))
