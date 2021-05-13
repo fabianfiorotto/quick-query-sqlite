@@ -1,3 +1,6 @@
+## 0.4.1 - Fix error
+ * Catch errors on connect
+
 ## 0.4.0 - WASM & Workers
 * Update sqlite v3.35
 * Run queries in a worker
